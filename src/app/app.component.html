@@ -2,28 +2,28 @@
     <div class="status">{{isComplete==1? "O - Win": isComplete == 2? "X - Win": isComplete == 3? "O - X Draw":
         "Competing"}}</div>
     <br>
-    <button (click)="initialChessboard()">Reset</button>
+    <button (click)="initialCellboard()">Reset</button>
     <div style="margin-top: 10px;">
         <label for="rule">How many items in a line will be treat as win? :</label>
         <br>
-        <input id="rule" style="width: 300px; margin-right: 6px;" type="number" [(ngModel)]="chessCountInLine" min="3"
+        <input id="rule" style="width: 300px; margin-right: 6px;" type="number" [(ngModel)]="winSequenceLength" min="3"
             max="7" />
-        <button (click)="initialChessboard()">Set Rule</button>
+        <button (click)="initialCellboard()">Set Rule</button>
         <br>
     </div>
 
     <div style="margin-top: 10px;">
         <label for="boardSize">Generate Board Size (n x n):</label>
         <br>
-        <input id="boardSize" style="width: 300px;margin-right: 6px;" type="number" [(ngModel)]="chessboardSize" min="3"
+        <input id="boardSize" style="width: 300px;margin-right: 6px;" type="number" [(ngModel)]="boardSize" min="3"
             max="10" />
-        <button (click)="initialChessboard()">Set BoardSize</button>
+        <button (click)="initialCellboard()">Set BoardSize</button>
     </div>
     <section style="margin-top: 10px;">
-        <div *ngFor="let rowItems of chessItems">
+        <div *ngFor="let rowItems of uiCells">
             <button
                 [ngClass]="{'highlight-win':cell.highLight==true, 'highlight-o':cell.label=='O', 'highlight-x': cell.label == 'X'}"
-                [disabled]="isComplete!=0" (click)="placeChessItem(cell)"
+                [disabled]="isComplete!=0" (click)="triggerCell(cell)"
                 *ngFor="let cell of rowItems; trackBy: trackByMethod"
                 style="width: 60px;height: 60px;margin: 4px 4px 4px 0;">{{cell.label}}</button>
         </div>
