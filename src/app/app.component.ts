@@ -1,80 +1,153 @@
 import { Component } from '@angular/core';
 
+export interface Cell {
+    row: number,
+    col: number
+}
+
+export interface UICell extends Cell {
+    label: "O" | "X" | "-"
+    highLight: boolean
+}
+
 @Component({
     selector: 'app-root',
     templateUrl: './app.component.html',
     styles: [`
-        .status {font-size:18px; color: red; font-weight:bold;}
         section > div > button {color: #efefef;}
+        .status {font-size:18px; color: red; font-weight:bold;}
         .highlight-win {color: red !important;}
         .highlight-x {background-color: blue;}
         .highlight-o {background-color: green;}
     `]
 })
-
 export class AppComponent {
 
-    // set the count of chess in line, if reach this count, it will be consided win.
-    chessCountInLine: number = 3;
-    // n x n, if chessboardSize = 5, it will generate chessboard whic size of 5 x 5
-    chessboardSize: number = 5;
+    // PROPERTIES
+    // ===================
+    // set the count of cell in line, if reach this count, it will be consided win.
+    public winSequenceLength: number = 3;
+    // n x n, if cellboardSize = 5, it will generate cellboard whic size of 5 x 5
+    public boardSize: number = 5;
     // 0: not-complete, 1: O-win, 2:X-win, 3: O-X draw
-    isComplete: 0 | 1 | 2 | 3 = 0;
-    chessItems!: ChessItem[][];
-    isOpponent: boolean = false;
+    public isComplete: 0 | 1 | 2 | 3 = 0;
+    public uiCells!: UICell[][];
+    public isOpponent: boolean = false;
 
-    constructor() {
+    // INITS
+    // ===================
+
+    public ngOnInit(): void {
+        this.initialCellboard();
     }
 
-    initialChessboard() {
-        let baseArr = (new Array(this.chessboardSize * 1)).fill(0).map((item, index) => item + index);
-        this.chessItems = Array.from(baseArr).map(row =>
+    // inits & resets
+    public initialCellboard(): void {
+        let baseArr = (new Array(this.boardSize * 1)).fill(0).map((item, index) => item + index);
+        this.uiCells = Array.from(baseArr).map(row =>
             Array.from(baseArr).map(col => ({ row, col, label: "-", highLight: false })));
         this.isComplete = 0;
     }
 
-    ngOnInit(): void {
-        this.initialChessboard();
-    }
-
-    trackByMethod(): number {
+    // for loop performance
+    public trackByMethod(): number {
         return Math.floor(Math.random() * 10000);
     }
 
-    placeChessItem(cell: ChessItem) {
+    // GAME FUNCTIONS
+    // ===================
+
+    // 1. Entry point from template
+    public triggerCell(cell: UICell) {
         if (cell.label != "-")
             return;
         cell.label = this.isOpponent ? "O" : "X";
         this.isOpponent = !this.isOpponent;
-        this.checkResult(cell);
-        this.checkBoard();
+        this.evaluateWinner(cell);
     }
 
-    checkBoard() {
-        for (let i = 0; i < this.chessItems.length; i++) {
-            for (let j = 0; j < this.chessItems[i].length; j++) {
-                if (this.chessItems[i][j].label == "-")
-                    return;
+    // 2. evaluate result
+    private evaluateWinner(cell: UICell) {
+        this.check('leftAcross', cell) ||
+            this.check('rightAcross', cell) ||
+            this.check('horizontal', cell) ||
+            this.check('vertical', cell) ||
+            this.checkDraw();
+    }
+
+    // 2.1 check for winner
+    private check(direction: 'leftAcross' | 'rightAcross' | 'horizontal' | 'vertical', trigger: UICell): boolean {
+
+        let playerSequence: Cell[] = [];
+
+        // loop template fn
+        let fillSequence = (cell: Cell,
+            condition: { (cell: Cell): boolean },
+            moveNext: { (cell: Cell): void }) => {
+            let result = true;
+            while (condition(cell)) {
+                let item = this.uiCells[cell.row][cell.col];
+                result &&= item.label == trigger.label && item.label !== '-';
+                if (!result)
+                    break;
+                playerSequence.push({ row: cell.row, col: cell.col });
+                moveNext(cell);
+            }
+        };
+
+        // filling playerSequence
+        switch (direction) {
+            case 'leftAcross':
+                fillSequence({ row: trigger.row, col: trigger.col }, (c) => (c.row >= 0 && c.col >= 0), (c) => c.row-- && c.col--);
+                fillSequence({ row: trigger.row + 1, col: trigger.col + 1 }, (c) => (c.row < this.uiCells.length && c.col < this.uiCells.length), (c) => c.row++ && c.col++);
+                break;
+            case 'rightAcross':
+                fillSequence({ row: trigger.row, col: trigger.col }, (c) => (c.row >= 0 && c.col < this.uiCells.length), (c) => c.row-- && c.col++);
+                fillSequence({ row: trigger.row + 1, col: trigger.col - 1 }, (c) => (c.row < this.uiCells.length && c.col >= 0), (c) => c.row++ && c.col--);
+                break;
+            case 'horizontal':
+                fillSequence({ row: trigger.row, col: trigger.col }, (c) => (c.row >= 0), (c) => c.row--);
+                fillSequence({ row: trigger.row + 1, col: trigger.col }, (c) => (c.row < this.uiCells.length), (c) => c.row++);
+                break;
+            case 'vertical':
+                fillSequence({ row: trigger.row, col: trigger.col }, (c) => (c.col >= 0), (c) => c.col--);
+                fillSequence({ row: trigger.row, col: trigger.col + 1 }, (c) => (c.col < this.uiCells.length), (c) => c.col++);
+                break;
+        }
+
+        // win condition
+        if (playerSequence.length >= this.winSequenceLength) {
+            this.isComplete = trigger.label == "X" ? 2 : 1;
+            playerSequence.map((item, index) => {
+                if (index < this.winSequenceLength)
+                    this.uiCells[item.row][item.col].highLight = true;
+            });
+            return true;
+        }
+        return false;
+    }
+
+    // 2.2 check for draw
+    private checkDraw(): boolean {
+        for (let i = 0; i < this.uiCells.length; i++) {
+            for (let j = 0; j < this.uiCells[i].length; j++) {
+                if (this.uiCells[i][j].label == "-")
+                    return false;
             }
         }
         this.isComplete = 3;
-    }
-
-    checkResult(cell: ChessItem) {
-        this.topLeftMiddleBottomRight(cell);
-        this.topRightMiddleBottomLeft(cell);
-        this.topMiddleBottom(cell);
-        this.leftMiddleRight(cell);
-
+        return true;
     }
 
 
-    topLeftMiddleBottomRight(cell: ChessItem) {
+    //  ======================== original evaluation methods ========================
+
+    topLeftMiddleBottomRight(cell: UICell) {
         let result: boolean = true;
-        let selectedItems: selectedItemIndex[] = [];
-        let { row, col }: selectedItemIndex = { row: cell.row, col: cell.col };
+        let selectedItems: Cell[] = [];
+        let { row, col }: Cell = { row: cell.row, col: cell.col };
         while (row >= 0 && col >= 0) {
-            let item = this.chessItems[row][col];
+            let item = this.uiCells[row][col];
             result &&= item.label == cell.label && item.label !== '-';
             if (!result)
                 break;
@@ -86,8 +159,8 @@ export class AppComponent {
         row = cell.row + 1;
         col = cell.col + 1;
         result = true
-        while (row < this.chessItems.length && col < this.chessItems.length) {
-            let item = this.chessItems[row][col];
+        while (row < this.uiCells.length && col < this.uiCells.length) {
+            let item = this.uiCells[row][col];
             result &&= item.label == cell.label && item.label !== '-';
             if (!result)
                 break;
@@ -96,55 +169,22 @@ export class AppComponent {
             col++;
         }
 
-        if (selectedItems.length >= this.chessCountInLine) {
+        if (selectedItems.length >= this.winSequenceLength) {
             this.isComplete = cell.label == "X" ? 2 : 1;
             selectedItems.map((item, index) => {
-                if (index < this.chessCountInLine)
-                    this.chessItems[item.row][item.col].highLight = true;
+                if (index < this.winSequenceLength)
+                    this.uiCells[item.row][item.col].highLight = true;
             });
         }
-        return result;
+        return selectedItems;
     }
 
-    topMiddleBottom(cell: ChessItem) {
+    topMiddleBottom(cell: UICell) {
         let result: boolean = true;
-        let selectedItems: selectedItemIndex[] = [];
-        let { row, col }: selectedItemIndex = { row: cell.row, col: cell.col };
-        while (row >= 0) {
-            let item = this.chessItems[row][col];
-            result &&= item.label == cell.label && item.label !== '-';
-            if (!result)
-                break;
-            selectedItems.push({ row, col });
-            row--;
-        }
-        row = cell.row + 1;
-        result = true
-        while (row < this.chessItems.length) {
-            let item = this.chessItems[row][col];
-            result &&= item.label == cell.label && item.label !== '-';
-            if (!result)
-                break;
-            selectedItems.push({ row, col });
-            row++;
-        }
-
-        if (selectedItems.length >= this.chessCountInLine) {
-            this.isComplete = cell.label == "X" ? 2 : 1;
-            selectedItems.map((item, index) => {
-                if (index < this.chessCountInLine)
-                    this.chessItems[item.row][item.col].highLight = true;
-            });
-        }
-        return result;
-    }
-
-    topRightMiddleBottomLeft(cell: ChessItem) {
-        let result: boolean = true;
-        let selectedItems: selectedItemIndex[] = [];
-        let { row, col }: selectedItemIndex = { row: cell.row, col: cell.col };
-        while (row >= 0 && col < this.chessItems.length) {
-            let item = this.chessItems[row][col];
+        let selectedItems: Cell[] = [];
+        let { row, col }: Cell = { row: cell.row, col: cell.col };
+        while (row >= 0 && col < this.uiCells.length) {
+            let item = this.uiCells[row][col];
             result &&= item.label == cell.label && item.label !== '-';
             if (!result)
                 break;
@@ -156,8 +196,8 @@ export class AppComponent {
         row = cell.row + 1;
         col = cell.col - 1;
         result = true
-        while (row < this.chessItems.length && col >= 0) {
-            let item = this.chessItems[row][col];
+        while (row < this.uiCells.length && col >= 0) {
+            let item = this.uiCells[row][col];
             result &&= item.label == cell.label && item.label !== '-';
             if (!result)
                 break;
@@ -166,22 +206,55 @@ export class AppComponent {
             col--;
         }
 
-        if (selectedItems.length >= this.chessCountInLine) {
+        if (selectedItems.length >= this.winSequenceLength) {
             this.isComplete = cell.label == "X" ? 2 : 1;
             selectedItems.map((item, index) => {
-                if (index < this.chessCountInLine)
-                    this.chessItems[item.row][item.col].highLight = true;
+                if (index < this.winSequenceLength)
+                    this.uiCells[item.row][item.col].highLight = true;
             });
         }
-        return result;
+        return selectedItems;
     }
 
-    leftMiddleRight(cell: ChessItem) {
+    topRightMiddleBottomLeft(cell: UICell) {
         let result: boolean = true;
-        let selectedItems: selectedItemIndex[] = [];
-        let { row, col }: selectedItemIndex = { row: cell.row, col: cell.col };
+        let selectedItems: Cell[] = [];
+        let { row, col }: Cell = { row: cell.row, col: cell.col };
+        while (row >= 0) {
+            let item = this.uiCells[row][col];
+            result &&= item.label == cell.label && item.label !== '-';
+            if (!result)
+                break;
+            selectedItems.push({ row, col });
+            row--;
+        }
+        row = cell.row + 1;
+        result = true
+        while (row < this.uiCells.length) {
+            let item = this.uiCells[row][col];
+            result &&= item.label == cell.label && item.label !== '-';
+            if (!result)
+                break;
+            selectedItems.push({ row, col });
+            row++;
+        }
+
+        if (selectedItems.length >= this.winSequenceLength) {
+            this.isComplete = cell.label == "X" ? 2 : 1;
+            selectedItems.map((item, index) => {
+                if (index < this.winSequenceLength)
+                    this.uiCells[item.row][item.col].highLight = true;
+            });
+        }
+        return selectedItems;
+    }
+
+    leftMiddleRight(cell: UICell) {
+        let result: boolean = true;
+        let selectedItems: Cell[] = [];
+        let { row, col }: Cell = { row: cell.row, col: cell.col };
         while (col >= 0) {
-            let item = this.chessItems[row][col];
+            let item = this.uiCells[row][col];
             result &&= item.label == cell.label && item.label !== '-';
             if (!result)
                 break;
@@ -190,8 +263,8 @@ export class AppComponent {
         }
         col = cell.col + 1;
         result = true
-        while (col < this.chessItems.length) {
-            let item = this.chessItems[row][col];
+        while (col < this.uiCells.length) {
+            let item = this.uiCells[row][col];
             result &&= item.label == cell.label && item.label !== '-';
             if (!result)
                 break;
@@ -199,25 +272,13 @@ export class AppComponent {
             col++;
         }
 
-        if (selectedItems.length >= this.chessCountInLine) {
+        if (selectedItems.length >= this.winSequenceLength) {
             this.isComplete = cell.label == "X" ? 2 : 1;
             selectedItems.map((item, index) => {
-                if (index < this.chessCountInLine)
-                    this.chessItems[item.row][item.col].highLight = true;
+                if (index < this.winSequenceLength)
+                    this.uiCells[item.row][item.col].highLight = true;
             });
         }
-        return result;
+        return selectedItems;
     }
-}
-
-export interface ChessItem {
-    row: number,
-    col: number,
-    label: "O" | "X" | "-"
-    highLight: boolean
-}
-
-export interface selectedItemIndex {
-    row: number,
-    col: number
 }
