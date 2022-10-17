@@ -1,4 +1,4 @@
-step 1: download proect
+step 1: download project
 
 step 2: npm install
 
